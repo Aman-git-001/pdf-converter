@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  DragEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import ConverterLinks from "./components/ConverterLinks";
 
 const formatLabels: Record<string, string> = {
@@ -59,6 +65,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const inputExtension = useMemo(
     () => (file ? getExtension(file.name) : ""),
@@ -83,15 +92,77 @@ export default function Home() {
   }, [availableFormats]);
 
   function selectFile(selectedFile: File | null) {
+    if (!selectedFile) return;
+
     setFile(selectedFile);
     setMessage("");
     setError("");
+    setIsDragging(false);
   }
 
   function handleFileChange(
     event: React.ChangeEvent<HTMLInputElement>
   ) {
-    selectFile(event.target.files?.[0] || null);
+    const selectedFile = event.target.files?.[0];
+
+    if (selectedFile) {
+      selectFile(selectedFile);
+    }
+  }
+
+  function handleDragEnter(
+    event: DragEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!loading) {
+      setIsDragging(true);
+    }
+  }
+
+  function handleDragOver(
+    event: DragEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!loading) {
+      event.dataTransfer.dropEffect = "copy";
+      setIsDragging(true);
+    }
+  }
+
+  function handleDragLeave(
+    event: DragEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setIsDragging(false);
+  }
+
+  function handleDrop(
+    event: DragEvent<HTMLDivElement>
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setIsDragging(false);
+
+    if (loading) return;
+
+    const droppedFiles = event.dataTransfer.files;
+
+    if (droppedFiles && droppedFiles.length > 0) {
+      selectFile(droppedFiles[0]);
+    }
+  }
+
+  function openFilePicker() {
+    if (!loading) {
+      fileInputRef.current?.click();
+    }
   }
 
   async function convertFile() {
@@ -144,7 +215,10 @@ export default function Home() {
 
       const url = window.URL.createObjectURL(blob);
 
-      const originalName = file.name.replace(/\.[^/.]+$/, "");
+      const originalName = file.name.replace(
+        /\.[^/.]+$/,
+        ""
+      );
 
       const link = document.createElement("a");
 
@@ -210,15 +284,41 @@ export default function Home() {
         </p>
 
         <div className="mx-auto mt-10 max-w-2xl rounded-[28px] border border-white/80 bg-white/70 p-4 shadow-[0_20px_70px_rgba(15,23,42,0.10)] backdrop-blur-2xl sm:p-6">
-          <label
-            htmlFor="file"
-            className="flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-300 bg-white/60 px-5 py-8 transition hover:border-blue-400 hover:bg-white/80"
+          
+          {/* DRAG & DROP AREA */}
+          <div
+            onClick={openFilePicker}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`flex min-h-52 select-none flex-col items-center justify-center rounded-3xl border-2 border-dashed px-5 py-8 transition-all duration-200 ${
+              isDragging
+                ? "scale-[1.02] border-blue-500 bg-blue-50 shadow-lg"
+                : "cursor-pointer border-slate-300 bg-white/60 hover:border-blue-400 hover:bg-white/80"
+            }`}
           >
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-2xl text-white shadow-lg">
+            <div
+              className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl shadow-lg transition-all ${
+                isDragging
+                  ? "bg-blue-600 text-white scale-110"
+                  : "bg-slate-900 text-white"
+              }`}
+            >
               ↑
             </div>
 
-            {file ? (
+            {isDragging ? (
+              <>
+                <p className="text-base font-semibold text-blue-700">
+                  Drop your file here
+                </p>
+
+                <p className="mt-2 text-xs text-blue-500">
+                  Release to select this file
+                </p>
+              </>
+            ) : file ? (
               <>
                 <p className="max-w-full truncate text-sm font-semibold">
                   {file.name}
@@ -229,29 +329,30 @@ export default function Home() {
                 </p>
 
                 <p className="mt-3 text-xs font-medium text-blue-600">
-                  Tap to choose another file
+                  Drop another file or click to choose
                 </p>
               </>
             ) : (
               <>
                 <p className="text-base font-semibold">
-                  Choose a file
+                  Drag & drop your file
                 </p>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Tap here to upload your document
+                  or click here to choose a file
                 </p>
               </>
             )}
 
             <input
+              ref={fileInputRef}
               id="file"
               type="file"
               className="hidden"
               onChange={handleFileChange}
               accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.ppt,.pptx,.odp,.xls,.xlsx,.ods,.csv,.jpg,.jpeg,.png"
             />
-          </label>
+          </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
             <select
